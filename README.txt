@@ -1,1 +1,0 @@
-My School Desk PWA\nUnggah isi folder ini ke root repository GitHub. Aktifkan GitHub Pages dari Settings > Pages, branch main, folder /(root). Data tugas disimpan lokal di browser; gunakan Backup data secara berkala.\n
