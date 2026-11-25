@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#101827">
+<link rel="manifest" href="manifest.webmanifest">
+<title>My School Desk</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#101827;color:#edf2fa;font:15px system-ui,Arial,sans-serif}
+header{padding:25px 18px 18px;background:linear-gradient(140deg,#17263d,#243b5b);border-radius:0 0 24px 24px}
+h1{font-size:23px;margin:0 0 5px}p{color:#b9c7d9;margin:5px 0}.wrap{max-width:760px;margin:auto;padding:16px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-top:18px}.stat,.panel,.task,.top-task{background:#1b293c;border:1px solid #2d4059;border-radius:15px;padding:13px}
+.stat b{display:block;font-size:24px}.stat small{color:#aebed2;font-size:12px}
+h2{font-size:17px;margin:22px 0 10px}.panel{display:grid;gap:10px}
+input,select,textarea{width:100%;padding:12px;border:1px solid #40536c;border-radius:10px;background:#111d2d;color:#fff;font:inherit}
+button{border:0;border-radius:10px;padding:12px 14px;background:#72a7ff;color:#102039;font-weight:700;font-size:14px;cursor:pointer}
+button.secondary{background:#31445e;color:#edf2fa}button.danger{background:#633b48;color:#fff}
+.row{display:flex;gap:8px;flex-wrap:wrap}.row>*{flex:1}.task{margin:9px 0}.task h3,.top-task h3{font-size:16px;margin:0 0 5px}.task small,.top-task small{color:#b4c2d4}.task p{font-size:13px}.done{opacity:.58}.done h3{text-decoration:line-through}
+.tag{font-size:11px;padding:3px 7px;border-radius:20px;background:#344b68;display:inline-block;margin:5px 4px 0 0}
+.empty{color:#aebed2;text-align:center;padding:20px}.hint{font-size:12px;color:#9eafc5}
+.top-task{margin:8px 0;border-left:4px solid #72a7ff}.top-task.first{border-left-color:#ffbd69}.top-label{font-size:11px;color:#9fc2ff;font-weight:700;letter-spacing:.04em}
+.task-actions{margin-top:10px}.priority-penting{background:#633b48}.priority-sedang{background:#66532f}.priority-normal{background:#315443}
+</style>
+</head>
+<body>
+<header><div class="wrap"><h1>MY SCHOOL DESK</h1><p>Ruang sederhana untuk mengatur tugas sekolahmu.</p>
+<div class="stats"><div class="stat"><b id="activeCount">0</b><small>Tugas aktif</small></div><div class="stat"><b id="doneCount">0</b><small>Selesai</small></div><div class="stat"><b id="highCount">0</b><small>Prioritas penting</small></div></div></div></header>
+<main class="wrap">
+<h2>Tambah tugas</h2>
+<form class="panel" id="taskForm">
+<input id="name" placeholder="Nama tugas" required>
+<div class="row"><input id="subject" placeholder="Mata pelajaran"><input id="deadline" type="date" aria-label="Batas waktu"></div>
+<div class="row"><select id="priority"><option value="Normal">Normal</option><option value="Sedang">Sedang</option><option value="Penting">Penting</option></select><input id="duration" type="number" min="5" placeholder="Estimasi menit"></div>
+<textarea id="notes" rows="2" placeholder="Catatan (opsional)"></textarea>
+<button type="submit">+ Simpan tugas</button>
+</form>
+<h2>Prioritas tugas</h2>
+<p class="hint">Urutan otomatis: deadline terdekat → Penting → Sedang → Normal → durasi terlama.</p>
+<div id="topTasks"></div>
+<h2>Daftar tugas</h2>
+<div class="row"><button class="secondary" data-filter="all">Semua</button><button class="secondary" data-filter="active">Aktif</button><button class="secondary" data-filter="done">Selesai</button></div>
+<div id="tasks"></div>
+<h2>Smart Task Assistant</h2>
+<div class="panel"><p id="advice">Tambahkan tugas untuk mendapatkan saran pengaturan prioritas.</p>
+<div class="row"><button class="secondary" id="exportBtn">Backup data</button><button class="secondary" id="importBtn">Pulihkan backup</button></div>
+<input id="fileInput" type="file" accept="application/json" hidden>
+<p class="hint">Data tersimpan di browser HP ini. Buat backup secara berkala agar data tidak hilang.</p></div>
+</main>
+<script>
+const key='mySchoolDeskTasksV1';
+let tasks=[];
+try{const saved=JSON.parse(localStorage.getItem(key)||'[]');tasks=Array.isArray(saved)?saved:[]}catch{tasks=[]}
+let filter='all';
+const $=id=>document.getElementById(id);
+const priorityRank=p=>p==='Penting'||p==='Tinggi'?0:p==='Sedang'?1:2;
+const priorityName=p=>(p==='Tinggi'?'Penting':p||'Normal');
+function compareTasks(a,b){
+ const da=a.deadline||'9999-12-31',db=b.deadline||'9999-12-31';
+ if(da!==db)return da<db?-1:1;
+ const pr=priorityRank(a.priority)-priorityRank(b.priority);if(pr)return pr;
+ return (Number(b.duration)||0)-(Number(a.duration)||0);
+}
+function sortedActive(){return tasks.filter(t=>!t.done).slice().sort(compareTasks)}
+const save=()=>{localStorage.setItem(key,JSON.stringify(tasks));render()};
+function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function dateText(d){if(!d)return 'Belum ditentukan';const x=new Date(d+'T00:00:00');return x.toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'})}
+function taskCard(t,top=false,index=0){
+ const p=priorityName(t.priority),cls=p.toLowerCase();
+ return `<article class="${top?'top-task '+(index===0?'first':''):'task'} ${t.done?'done':''}">
+ ${top?'<div class="top-label">REKOMENDASI #'+(index+1)+'</div>':''}
+ <h3>${esc(t.name)}</h3><small>${esc(t.subject||'Tanpa mata pelajaran')} · Deadline: ${dateText(t.deadline)}</small>
+ <div><span class="tag priority-${cls}">Prioritas ${esc(p)}</span>${t.duration?'<span class="tag">'+esc(t.duration)+' menit</span>':''}</div>
+ ${t.notes?'<p>'+esc(t.notes)+'</p>':''}
+ ${top?'':'<div class="row task-actions"><button onclick="toggleTask(\''+esc(t.id)+'\')">'+(t.done?'Aktifkan':'Tandai selesai')+'</button><button class="danger" onclick="deleteTask(\''+esc(t.id)+'\')">Hapus</button></div>'}
+ </article>`;
+}
+function render(){
+ const active=sortedActive(),done=tasks.filter(t=>t.done);
+ $('activeCount').textContent=active.length;$('doneCount').textContent=done.length;
+ $('highCount').textContent=active.filter(t=>priorityRank(t.priority)===0).length;
+ $('topTasks').innerHTML=active.length?active.slice(0,3).map((t,i)=>taskCard(t,true,i)).join(''):'<div class="empty">Belum ada tugas aktif. Tambahkan tugas pertamamu!</div>';
+ let shown=tasks.filter(t=>filter==='all'||(filter==='active'?!t.done:t.done));
+ shown.sort((a,b)=>{if(a.done!==b.done)return a.done?1:-1;return compareTasks(a,b)});
+ $('tasks').innerHTML=shown.length?shown.map(t=>taskCard(t)).join(''):'<div class="empty">Belum ada tugas di bagian ini.</div>';
+ if(!active.length)$('advice').textContent='Semua tugas sudah selesai. Bagus!';
+ else {const t=active[0],p=priorityName(t.priority);$('advice').textContent='Mulai dari "'+t.name+'". Deadline: '+dateText(t.deadline)+'. Kategori: '+p+'. Estimasi: '+(t.duration?t.duration+' menit':'belum diisi')+'.';}
+}
+window.toggleTask=id=>{const t=tasks.find(x=>x.id===id);if(t)t.done=!t.done;save()};
+window.deleteTask=id=>{if(confirm('Hapus tugas ini?')){tasks=tasks.filter(t=>t.id!==id);save()}};
+$('taskForm').onsubmit=e=>{e.preventDefault();tasks.push({id:Date.now().toString()+Math.random().toString(16).slice(2),name:$('name').value.trim(),subject:$('subject').value.trim(),deadline:$('deadline').value,priority:$('priority').value,duration:$('duration').value,notes:$('notes').value,done:false});e.target.reset();save()};
+document.querySelectorAll('[data-filter]').forEach(b=>b.onclick=()=>{filter=b.dataset.filter;render()});
+$('exportBtn').onclick=()=>{const a=document.createElement('a'),url=URL.createObjectURL(new Blob([JSON.stringify(tasks,null,2)],{type:'application/json'}));a.href=url;a.download='backup-my-school-desk.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)};
+$('importBtn').onclick=()=>$('fileInput').click();
+$('fileInput').onchange=async e=>{try{const f=e.target.files[0];if(!f)return;const data=JSON.parse(await f.text());if(Array.isArray(data)&&data.every(t=>t&&typeof t==='object'&&'name'in t)){if(confirm('Pulihkan backup? Data tugas di browser saat ini akan diganti.')){tasks=data;save();alert('Backup berhasil dipulihkan.')}}else alert('Format backup tidak sesuai.')}catch{alert('File backup tidak dapat dibaca.')}e.target.value=''};
+if('serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js').catch(()=>{});
+render();
+</script>
+</body>
+</html>
